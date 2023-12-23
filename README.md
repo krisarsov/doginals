@@ -1,6 +1,6 @@
 # Doginals
 
-A minter and protocol for inscriptions on Dogecoin. 
+A minter and protocol for inscriptions on Dogecoin.
 
 ## Setup
 
@@ -66,10 +66,21 @@ node . mint DSV12KPb8m5b6YtfmqY89K6YqvdVwMYDPn dog.jpeg
 ```
 
 ```
-node . mint DSV12KPb8m5b6YtfmqY89K6YqvdVwMYDPn "text/plain;charset=utf8" 576f6f6621 
+node . mint DSV12KPb8m5b6YtfmqY89K6YqvdVwMYDPn "text/plain;charset=utf8" 576f6f6621
 ```
 
 **Note**: Please use a fresh wallet to mint to with nothing else in it until proper wallet for doginals support comes. You can get a paper wallet [here](https://www.fujicoin.org/wallet_generator?currency=Dogecoin).
+
+## DRC-20
+
+```
+node . drc-20 mint <address> <ticker> <amount>
+```
+
+Examples:
+```
+node . drc-20 mint DSV12KPb8m5b6YtfmqY89K6YqvdVwMYDPn dogi 1000
+```
 
 ## Viewing
 
