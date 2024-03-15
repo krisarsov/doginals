@@ -74,12 +74,12 @@ node . mint DSV12KPb8m5b6YtfmqY89K6YqvdVwMYDPn "text/plain;charset=utf8" 576f6f6
 ## DRC-20
 
 ```
-node . drc-20 mint <address> <ticker> <amount>
+node . drc-20 mint <address> <ticker> <amount> <repeat>
 ```
 
 Examples:
 ```
-node . drc-20 mint DSV12KPb8m5b6YtfmqY89K6YqvdVwMYDPn dogi 1000
+node . drc-20 mint DSV12KPb8m5b6YtfmqY89K6YqvdVwMYDPn dogi 1000 1
 ```
 
 ## Viewing

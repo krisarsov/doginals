@@ -48,64 +48,66 @@ async function main() {
 }
 
 async function doge20() {
-  let subcmd = process.argv[3]
+    let subcmd = process.argv[3]
 
-  if (subcmd === 'mint') {
-    await doge20Transfer("mint")
-  } else if (subcmd === 'transfer') {
-    await doge20Transfer()
-  } else if (subcmd === 'deploy') {
-    await doge20Deploy()
-  } else {
-    throw new Error(`unknown subcommand: ${subcmd}`)
-  }
+    if (subcmd === 'mint') {
+        await doge20Transfer("mint")
+    } else if (subcmd === 'transfer') {
+        await doge20Transfer()
+    } else if (subcmd === 'deploy') {
+        await doge20Deploy()
+    } else {
+        throw new Error(`unknown subcommand: ${subcmd}`)
+    }
 }
 
 async function doge20Deploy() {
-  const argAddress = process.argv[4]
-  const argTicker = process.argv[5]
-  const argMax = process.argv[6]
-  const argLimit = process.argv[7]
+    const argAddress = process.argv[4]
+    const argTicker = process.argv[5]
+    const argMax = process.argv[6]
+    const argLimit = process.argv[7]
 
-  const doge20Tx = {
-    p: "drc-20",
-    op: "deploy",
-    tick: `${argTicker.toLowerCase()}`,
-    max: `${argMax}`,
-    lim: `${argLimit}`
-  };
+    const doge20Tx = {
+        p: "drc-20",
+        op: "deploy",
+        tick: `${argTicker.toLowerCase()}`,
+        max: `${argMax}`,
+        lim: `${argLimit}`
+    };
 
-  const parsedDoge20Tx = JSON.stringify(doge20Tx);
+    const parsedDoge20Tx = JSON.stringify(doge20Tx);
 
-  // encode the doge20Tx as hex string
-  const encodedDoge20Tx = Buffer.from(parsedDoge20Tx).toString('hex');
+    // encode the doge20Tx as hex string
+    const encodedDoge20Tx = Buffer.from(parsedDoge20Tx).toString('hex');
 
-  console.log("Deploying drc-20 token...");
-  await mint(argAddress, "text/plain;charset=utf-8", encodedDoge20Tx);
+    console.log("Deploying drc-20 token...");
+    await mint(argAddress, "text/plain;charset=utf-8", encodedDoge20Tx);
 }
 
 async function doge20Transfer(op = "transfer") {
-  const argAddress = process.argv[4]
-  const argTicker = process.argv[5]
-  const argAmount = process.argv[6]
-  const argRepeat = Number(process.argv[7]) || 1;
+    const argAddress = process.argv[4]
+    const argTicker = process.argv[5]
+    const argAmount = process.argv[6]
+    const argRepeat = Number(process.argv[7]) || 1;
 
-  const doge20Tx = {
-    p: "drc-20",
-    op,
-    tick: `${argTicker.toLowerCase()}`,
-    amt: `${argAmount}`
-  };
+    const doge20Tx = {
+        p: "drc-20",
+        op,
+        tick: `${argTicker.toLowerCase()}`,
+        amt: `${argAmount}`
+    };
 
-  const parsedDoge20Tx = JSON.stringify(doge20Tx);
+    const parsedDoge20Tx = JSON.stringify(doge20Tx);
 
-  // encode the doge20Tx as hex string
-  const encodedDoge20Tx = Buffer.from(parsedDoge20Tx).toString('hex');
+    // encode the doge20Tx as hex string
+    const encodedDoge20Tx = Buffer.from(parsedDoge20Tx).toString('hex');
 
-  for (let i = 0; i < argRepeat; i++) {
-    console.log("Minting drc-20 token...", i + 1, "of", argRepeat, "times");
-    await mint(argAddress, "text/plain;charset=utf-8", encodedDoge20Tx);
-  }
+    console.log('Inscription text:', parsedDoge20Tx);
+
+    for (let i = 0; i < argRepeat; i++) {
+        console.log("Minting drc-20 token...", i + 1, "of", argRepeat, "times");
+        await mint(argAddress, "text/plain;charset=utf-8", encodedDoge20Tx);
+    }
 }
 
 async function wallet() {
@@ -115,8 +117,11 @@ async function wallet() {
         walletNew()
     } else if (subcmd == 'sync') {
         await walletSync()
+        // await walletSyncLocal()
     } else if (subcmd == 'balance') {
         walletBalance()
+    } else if (subcmd == 'fees') {
+        await walletGetFees()
     } else if (subcmd == 'send') {
         await walletSend()
     } else if (subcmd == 'split') {
@@ -140,16 +145,83 @@ function walletNew() {
     }
 }
 
+async function walletGetFees() {
+    if (process.env.TESTNET == 'true') throw new Error('no testnet api')
+
+    console.log('get fee estimates with bells.quark.blue api')
+
+    let response = await axios.get(`https://api.blockchair.com/dogecoin/stats`)
+
+    if (response.status !== 200) {
+        throw new Error('Failed to fetch UTXOs');
+    }
+
+    const { suggested_transaction_fee_per_byte_sat } = response.data.data;
+
+    const data = {
+        1: suggested_transaction_fee_per_byte_sat
+    };
+
+    const estimates = Object.entries(data)
+        .map(([block, fee]) => ([block, Math.floor(fee) * 1000]))
+        .reduce((acc, [block, fee]) => {
+            acc[block] = fee;
+
+            return acc;
+        }, {})
+    console.table(estimates);
+}
 
 async function walletSync() {
     if (process.env.TESTNET == 'true') throw new Error('no testnet api')
 
     let wallet = JSON.parse(fs.readFileSync(WALLET_PATH))
+    // wallet.utxos = await getUTXOsFromDogeChain(wallet.address)
+    wallet.utxos = await getUTXOsFromBlockChair(wallet.address)
 
-    console.log('syncing utxos with dogechain.info api')
+    fs.writeFileSync(WALLET_PATH, JSON.stringify(wallet, 0, 2))
 
-    let response = await axios.get(`https://dogechain.info/api/v1/address/unspent/${wallet.address}`)
-    wallet.utxos = response.data.unspent_outputs.map(output => {
+    walletBalance();
+}
+
+/**
+ * https://github.com/Blockchair/Blockchair.Support/blob/master/API.md
+ * @param {*} address
+ * @returns
+ */
+async function getUTXOsFromBlockChair(address) {
+    // const response = await axios.get(`https://dogechain.info/api/v1/address/unspent/${address}`);
+    const response = await axios.get(`https://api.blockchair.com/dogecoin/dashboards/address/${address}`);
+
+    if (response.status !== 200) {
+        throw new Error('Failed to fetch UTXOs');
+    }
+
+    const { [address]: addressData } = response.data.data;
+
+    return addressData.utxo.map(output => {
+        return {
+            txid: output.transaction_hash,
+            vout: output.index,
+            script: Script(new Address(address)).toHex(),
+            satoshis: output.value
+        }
+    })
+}
+
+/**
+ * https://github.com/Blockchair/Blockchair.Support/blob/master/API.md
+ * @param {*} address
+ * @returns
+ */
+async function getUTXOsFromDogeChain(address) {
+    const response = await axios.get(`https://dogechain.info/api/v1/address/unspent/${address}`);
+
+    if (response.status !== 200) {
+        throw new Error('Failed to fetch UTXOs');
+    }
+
+    return response.data.unspent_outputs.map(output => {
         return {
             txid: output.tx_hash,
             vout: output.tx_output_n,
@@ -157,14 +229,56 @@ async function walletSync() {
             satoshis: output.value
         }
     })
-
-    fs.writeFileSync(WALLET_PATH, JSON.stringify(wallet, 0, 2))
-
-    let balance = wallet.utxos.reduce((acc, curr) => acc + curr.satoshis, 0)
-
-    console.log('balance', balance)
 }
 
+async function walletSyncLocal() {
+    if (process.env.TESTNET == 'true') {
+        throw new Error('no testnet api')
+    }
+
+    let wallet = JSON.parse(fs.readFileSync(WALLET_PATH))
+
+    console.log('syncing utxos with local')
+
+    const body = {
+        jsonrpc: '1.0',
+        id: 'doginals',
+        method: 'listunspent',
+        params: [0, 9999999, ['DKHF2Wpk2g4ZTXwoH1jXfBhap1GBZxMKWk']]
+    }
+
+    const options = {
+        auth: {
+            username: process.env.NODE_RPC_USER,
+            password: process.env.NODE_RPC_PASS
+        }
+    }
+
+    console.log(process.env.NODE_RPC_URL)
+    let response = await axios.post(process.env.NODE_RPC_URL, body, options)
+
+    console.log(body)
+    console.log(JSON.stringify(response.data, null, 4))
+
+    process.exit()
+
+    wallet.utxos = response.data.result
+        .map((utxo) => {
+            const parts = utxo.amount.toString().split('.');
+            const decimalPart = (parts[1] || '') + '00000000';
+            const satoshis = parseInt(parts[0] + decimalPart.substring(0, 8), 10);
+            return {
+                txid: utxo.txid,
+                vout: utxo.vout,
+                satoshis: satoshis,
+                script: utxo.scriptPubKey
+            }
+        })
+
+    console.log(getBalanceFormatted(wallet))
+
+    fs.writeFileSync(WALLET_PATH, JSON.stringify(wallet, 0, 2))
+}
 
 function walletBalance() {
     let wallet = JSON.parse(fs.readFileSync(WALLET_PATH))
@@ -268,26 +382,26 @@ async function broadcastAll(txs, retry) {
         try {
             await broadcast(txs[i], retry)
         } catch (e) {
-          console.log('broadcast failed', e?.response.data)
-          if (e?.response?.data.error?.message?.includes("bad-txns-inputs-spent") || e?.response?.data.error?.message?.includes("already in block chain")) {
-            console.log('tx already sent, skipping')
-            continue;
-          }
-          console.log('saving pending txs to pending-txs.json')
-          console.log('to reattempt broadcast, re-run the command')
-          fs.writeFileSync('pending-txs.json', JSON.stringify(txs.slice(i).map(tx => tx.toString())))
-          process.exit(1)
+            console.log('broadcast failed', e?.response.data)
+            if (e?.response?.data.error?.message?.includes("bad-txns-inputs-spent") || e?.response?.data.error?.message?.includes("already in block chain")) {
+                console.log('tx already sent, skipping')
+                continue;
+            }
+            console.log('saving pending txs to pending-txs.json')
+            console.log('to reattempt broadcast, re-run the command')
+            fs.writeFileSync('pending-txs.json', JSON.stringify(txs.slice(i).map(tx => tx.toString())))
+            process.exit(1)
         }
     }
 
     try {
-      fs.unlinkSync('pending-txs.json')
+        fs.unlinkSync('pending-txs.json')
     } catch (err) {
-      // ignore
+        // ignore
     }
 
     if (txs.length > 1) {
-      console.log('inscription txid:', txs[1].hash)
+        console.log('inscription txid:', txs[1].hash)
     }
 }
 
@@ -340,8 +454,6 @@ function inscribe(wallet, address, contentType, data) {
         inscription.chunks.push(numberToChunk(parts.length - n - 1))
         inscription.chunks.push(bufferToChunk(part))
     })
-
-
 
     let p2shInput
     let lastLock
@@ -410,9 +522,8 @@ function inscribe(wallet, address, contentType, data) {
             script: ''
         })
 
-        p2shInput.clearSignatures = () => {}
-        p2shInput.getSignatures = () => {}
-
+        p2shInput.clearSignatures = () => { }
+        p2shInput.getSignatures = () => { }
 
         lastLock = lock
         lastPartial = partial
@@ -501,9 +612,9 @@ async function broadcast(tx, retry) {
 
     while (true) {
         try {
-            const { status, statusText, data } = await axios.post(process.env.NODE_RPC_URL, body, options)
+            const { status, statusText, data: { result, ...rest } } = await axios.post(process.env.NODE_RPC_URL, body, options)
 
-            console.log(status, statusText, data );
+            console.log(status, statusText, { url: `https://sochain.com/tx/DOGE/${result}`, ...rest });
             break
         } catch (e) {
             if (!retry) throw e
